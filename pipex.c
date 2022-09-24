@@ -6,45 +6,58 @@
 /*   By: jchamorr <jchamorr@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2022/06/24 10:46:49 by jchamorr          #+#    #+#             */
-/*   Updated: 2022/07/28 12:49:44 by jchamorr         ###   ########.fr       */
+/*   Updated: 2022/09/19 19:12:25 by jchamorr         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "libft/libft.h"
 #include "pipex.h"
 
-/*
-	Crea una "PIPE | " (canal de datos unidireccional) para comunicar procesos
-	devuelve dos FD
-*/
+void	child_p(char **av, char **env, t_pipex *s)
+{
+	dup2(s->fd[1], STDOUT_FILENO);
+	close(s->fd[0]);
+	dup2(s->in, STDIN_FILENO);
+	s->args = ft_split(av[2], ' ');
+	if (command(s, s->args[0]) == 0)
+		error_type(4);
+	close_fds(s);
+	execve (s->cmd, s->args, env);
+}
 
+void	parent_p(char **av, char **env, t_pipex *s)
+{
+	dup2(s->fd[0], STDIN_FILENO);
+	close(s->fd[1]);
+	dup2(s->out, STDOUT_FILENO);
+	s->args = ft_split(av[3], ' ');
+	if (command(s, s->args[0]) == 0)
+		error_type(4);
+	execve (s->cmd, s->args, env);
+}
 
-/*
-	1. Comprobamos el nº de args
-	2. Pasamos el FD por el pipe { fd[0] - Read ---- fd[1] - Write }
-
-	   The array pipefd is used to
-       return two file descriptors referring to the ends of the pipe.
-       pipefd[0] refers to the read end of the pipe.  pipefd[1] refers
-       to the write end of the pipe.  Data written to the write end of
-       the pipe is buffered by the kernel until it is read from the read
-       end of the pipe.  For further details, see pipe(7).
-*/
 int	main(int ac, char **av, char **env)
 {
-	t_pipex	*s;
+	t_pipex	s;
 
 	if (ac == 5)
 	{
-		if(pipe(s->fd) == -1)
+		s.in = open(av[1], O_RDONLY);
+		s.out = open(av[ac - 1], O_CREAT | O_WRONLY | O_TRUNC, 0644);
+		if (s.in < 0 || s.out < 0)
+			error_type(3);
+		if (pipe(s.fd) == -1)
 			error_type(1);
-		s->pid = fork();
-		if (s->pid == -1)
+		s.paths = pathfinder(env);
+		s.cmd_list = ft_split(s.paths, ':');
+		s.pid = fork();
+		if (s.pid == -1)
 			error_type(2);
-		{
-			/* code */
-		}
-
+		if (s.pid == 0)
+			child_p(av, env, &s);
+		parent_p(av, env, &s);
+		waitpid(s.pid, NULL, 0);
+		fliying_free(&s);
 	}
 	else
 		ft_putendl_fd(ARG_ERROR, 1);
